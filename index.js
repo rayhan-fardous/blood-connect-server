@@ -1,6 +1,6 @@
 const express = require('express');
 const dotenv = require('dotenv');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
 
 dotenv.config(); 
@@ -23,21 +23,62 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // await client.connect();
-    // await client.db('admin').command({ ping: 1 });
-    console.log(
-      'Pinged your deployment. You successfully connected to MongoDB!'
-    );
-  } finally {
-    // await client.close();
+    await client.connect();
+    console.log('Connected to MongoDB successfully');
+
+    const db = client.db('BloodConnect');
+
+    // GET all requests with optional status filter
+    app.get('/api/donation-requests', async (req, res) => {
+      try {
+        const filter = {};
+        if (req.query.status) {
+          filter.status = req.query.status;
+        }
+        const requests = await db
+          .collection('donationrequests')
+          .find(filter)
+          .toArray();
+        res.json(requests);
+      } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+      }
+    });
+
+    app.get('/api/donation-requests/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).json({ message: 'Invalid ID format' });
+        }
+
+        const request = await db.collection('donationrequests').findOne({
+          _id: new ObjectId(id),
+        });
+
+        if (!request) {
+          return res.status(404).json({ message: 'Request not found' });
+        }
+
+        res.json(request);
+      } catch (error) {
+        console.error('Error fetching request:', error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    });
+
+    app.get('/', (req, res) => {
+      res.send('BloodConnect Server is Running');
+    });
+    
+    app.listen(port, () => {
+      console.log(`Server running on port ${port}`);
+    });
+  } catch (error) {
+    console.error('Failed to connect to MongoDB:', error);
+    process.exit(1);
   }
 }
-run().catch(console.dir);
 
-app.get('/', (req, res) => {
-  res.send('BloodConnect backend server is running');
-});
-
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+run();
