@@ -44,6 +44,76 @@ async function run() {
       }
     });
 
+    // GET /api/profile – fetch current user's profile
+    app.get("/api/profile", async (req, res) => {
+      try {
+        const db = client.db("BloodConnect");
+        const email = req.query.email;
+        if (!email)
+          return res
+            .status(400)
+            .json({ success: false, message: "Email is required" });
+
+        const user = await db.collection("user").findOne({ email });
+        if (!user)
+          return res
+            .status(404)
+            .json({ success: false, message: "User not found" });
+
+        res.json({
+          success: true,
+          profile: {
+            name: user.name,
+            email: user.email,
+            avatarUrl: user.image || "",
+            bloodGroup: user.bloodGroup || "",
+            district: user.district || "",
+            upazila: user.upazila || "",
+            phone: user.phone || "",
+          },
+        });
+      } catch (error) {
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
+    // PUT /api/profile – update profile fields (name, avatar, bloodGroup, district, upazila)
+    app.put("/api/profile", async (req, res) => {
+      try {
+        const db = client.db("BloodConnect");
+        const { email, name, avatarUrl, bloodGroup, district, upazila, phone } =
+          req.body;
+
+        if (!email) {
+          return res
+            .status(400)
+            .json({ success: false, message: "Email is required" });
+        }
+
+        const updateFields = {};
+        if (name) updateFields.name = name;
+        if (avatarUrl) updateFields.image = avatarUrl;
+        if (bloodGroup !== undefined) updateFields.bloodGroup = bloodGroup;
+        if (district !== undefined) updateFields.district = district;
+        if (upazila !== undefined) updateFields.upazila = upazila;
+        if (phone !== undefined) updateFields.phone = phone;
+
+        const result = await db
+          .collection("user")
+          .updateOne({ email }, { $set: updateFields });
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .json({ success: false, message: "User not found" });
+        }
+        res.json({ success: true, message: "Profile updated" });
+      } catch (error) {
+        console.error("Profile PUT error:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
     app.get("/api/funding", async (req, res) => {
       try {
         const filter = {};
@@ -81,7 +151,7 @@ async function run() {
       }
     });
 
-    app.post('/api/create-request', async (req, res) => {
+    app.post("/api/create-request", async (req, res) => {
       try {
         const {
           recipientName,
@@ -107,21 +177,21 @@ async function run() {
           !requesterName ||
           !requesterEmail
         ) {
-          return res.status(400).json({ message: 'Missing required fields' });
+          return res.status(400).json({ message: "Missing required fields" });
         }
 
         const validBloodGroups = [
-          'A+',
-          'A-',
-          'B+',
-          'B-',
-          'AB+',
-          'AB-',
-          'O+',
-          'O-',
+          "A+",
+          "A-",
+          "B+",
+          "B-",
+          "AB+",
+          "AB-",
+          "O+",
+          "O-",
         ];
         if (!validBloodGroups.includes(bloodGroup)) {
-          return res.status(400).json({ message: 'Invalid blood group' });
+          return res.status(400).json({ message: "Invalid blood group" });
         }
 
         const newRequest = {
@@ -131,27 +201,27 @@ async function run() {
           bloodGroup,
           donationDate,
           donationTime,
-          requestMessage: requestMessage || '',
-          hospitalName: hospitalName || '',
-          fullAddress: fullAddress || '',
-          status: 'pending',
+          requestMessage: requestMessage || "",
+          hospitalName: hospitalName || "",
+          fullAddress: fullAddress || "",
+          status: "pending",
           requesterName,
           requesterEmail,
           createdAt: new Date(),
         };
 
         const result = await db
-          .collection('donationrequests')
+          .collection("donationrequests")
           .insertOne(newRequest);
 
         res.status(201).json({
           success: true,
-          message: 'Donation request created successfully',
+          message: "Donation request created successfully",
           id: result.insertedId,
         });
       } catch (error) {
-        console.error('Error creating request:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error("Error creating request:", error);
+        res.status(500).json({ message: "Internal server error" });
       }
     });
 
