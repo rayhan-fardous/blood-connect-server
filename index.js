@@ -50,6 +50,7 @@ async function run() {
         if (req.query.status) {
           filter.status = req.query.status;
         }
+
         const requests = await db.collection("funding").find(filter).toArray();
         res.json(requests);
       } catch (error) {
@@ -77,6 +78,80 @@ async function run() {
       } catch (error) {
         console.error("Error fetching request:", error);
         res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
+    app.post('/api/create-request', async (req, res) => {
+      try {
+        const {
+          recipientName,
+          district,
+          upazila,
+          bloodGroup,
+          donationDate,
+          donationTime,
+          requestMessage,
+          hospitalName,
+          fullAddress,
+          requesterName,
+          requesterEmail,
+        } = req.body;
+
+        if (
+          !recipientName ||
+          !district ||
+          !upazila ||
+          !bloodGroup ||
+          !donationDate ||
+          !donationTime ||
+          !requesterName ||
+          !requesterEmail
+        ) {
+          return res.status(400).json({ message: 'Missing required fields' });
+        }
+
+        const validBloodGroups = [
+          'A+',
+          'A-',
+          'B+',
+          'B-',
+          'AB+',
+          'AB-',
+          'O+',
+          'O-',
+        ];
+        if (!validBloodGroups.includes(bloodGroup)) {
+          return res.status(400).json({ message: 'Invalid blood group' });
+        }
+
+        const newRequest = {
+          recipientName,
+          district,
+          upazila,
+          bloodGroup,
+          donationDate,
+          donationTime,
+          requestMessage: requestMessage || '',
+          hospitalName: hospitalName || '',
+          fullAddress: fullAddress || '',
+          status: 'pending',
+          requesterName,
+          requesterEmail,
+          createdAt: new Date(),
+        };
+
+        const result = await db
+          .collection('donationrequests')
+          .insertOne(newRequest);
+
+        res.status(201).json({
+          success: true,
+          message: 'Donation request created successfully',
+          id: result.insertedId,
+        });
+      } catch (error) {
+        console.error('Error creating request:', error);
+        res.status(500).json({ message: 'Internal server error' });
       }
     });
 
