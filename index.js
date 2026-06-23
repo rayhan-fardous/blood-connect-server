@@ -128,12 +128,12 @@ async function run() {
       }
     });
 
-    app.put('/api/donation-requests/:id', async (req, res) => {
+    app.put("/api/donation-requests/:id", async (req, res) => {
       try {
-        const db = client.db('BloodConnect');
+        const db = client.db("BloodConnect");
         const { id } = req.params;
         if (!ObjectId.isValid(id)) {
-          return res.status(400).json({ message: 'Invalid ID format' });
+          return res.status(400).json({ message: "Invalid ID format" });
         }
 
         const {
@@ -146,10 +146,11 @@ async function run() {
           donationDate,
           donationTime,
           requestMessage,
-          status, 
+          status,
+          donorName,
+          donorEmail,
         } = req.body;
 
-       
         const updateFields = {};
         if (recipientName !== undefined)
           updateFields.recipientName = recipientName;
@@ -166,22 +167,42 @@ async function run() {
         if (requestMessage !== undefined)
           updateFields.requestMessage = requestMessage;
         if (status !== undefined) updateFields.status = status;
+        if (donorName !== undefined) updateFields.donorName = donorName;
+        if (donorEmail !== undefined) updateFields.donorEmail = donorEmail;
 
         const result = await db
-          .collection('donationrequests')
+          .collection("donationrequests")
           .updateOne({ _id: new ObjectId(id) }, { $set: updateFields });
 
         if (result.matchedCount === 0) {
-          return res.status(404).json({ message: 'Request not found' });
+          return res.status(404).json({ message: "Request not found" });
         }
 
-        res.json({ success: true, message: 'Request updated' });
+        res.json({ success: true, message: "Request updated" });
       } catch (error) {
-        console.error('Update error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error("Update error:", error);
+        res.status(500).json({ message: "Internal server error" });
       }
     });
 
+    app.delete('/api/donation-requests/:id', async (req, res) => {
+      try {
+        const db = client.db('BloodConnect');
+        const { id } = req.params;
+        if (!ObjectId.isValid(id))
+          return res.status(400).json({ message: 'Invalid ID' });
+
+        const result = await db
+          .collection('donationrequests')
+          .deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 0)
+          return res.status(404).json({ message: 'Request not found' });
+
+        res.json({ success: true, message: 'Deleted' });
+      } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+      }
+    });
 
     app.get("/api/donation-requests/:id", async (req, res) => {
       try {
