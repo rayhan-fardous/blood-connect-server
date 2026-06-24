@@ -28,6 +28,44 @@ async function run() {
 
     const db = client.db("BloodConnect");
 
+    app.get("/api/users", async (req, res) => {
+      try {
+        const db = client.db("BloodConnect");
+        const users = await db.collection("user").find({}).toArray();
+        res.json(users);
+      } catch (error) {
+        res.status(500).json({ message: "Server error" });
+      }
+    });
+
+    // PUT /api/users/:id – update status or role
+    app.put("/api/users/update", async (req, res) => {
+      try {
+        const db = client.db("BloodConnect");
+        const { email, status, role } = req.body;
+        if (!email)
+          return res
+            .status(400)
+            .json({ success: false, message: "Email required" });
+
+        const updateFields = {};
+        if (status) updateFields.status = status;
+        if (role) updateFields.roll = role;
+
+        const result = await db
+          .collection("user")
+          .updateOne({ email }, { $set: updateFields });
+        if (result.matchedCount === 0)
+          return res
+            .status(404)
+            .json({ success: false, message: "User not found" });
+
+        res.json({ success: true, message: "User updated" });
+      } catch (error) {
+        res.status(500).json({ success: false, message: "Server error" });
+      }
+    });
+
     app.get("/api/donation-requests", async (req, res) => {
       try {
         const filter = {};
@@ -45,6 +83,7 @@ async function run() {
     });
 
     // GET /api/profile – fetch current user's profile
+
     app.get("/api/profile", async (req, res) => {
       try {
         const db = client.db("BloodConnect");
@@ -107,6 +146,7 @@ async function run() {
             .status(404)
             .json({ success: false, message: "User not found" });
         }
+
         res.json({ success: true, message: "Profile updated" });
       } catch (error) {
         console.error("Profile PUT error:", error);
@@ -167,8 +207,8 @@ async function run() {
         if (requestMessage !== undefined)
           updateFields.requestMessage = requestMessage;
         if (status !== undefined) updateFields.status = status;
-        if (donorName !== undefined) updateFields.donorName = donorName;
-        if (donorEmail !== undefined) updateFields.donorEmail = donorEmail;
+        if (donorName !== undefined) updateFields.donorName = donorName; // ←
+        if (donorEmail !== undefined) updateFields.donorEmail = donorEmail; // ←
 
         const result = await db
           .collection("donationrequests")
@@ -185,22 +225,22 @@ async function run() {
       }
     });
 
-    app.delete('/api/donation-requests/:id', async (req, res) => {
+    app.delete("/api/donation-requests/:id", async (req, res) => {
       try {
-        const db = client.db('BloodConnect');
+        const db = client.db("BloodConnect");
         const { id } = req.params;
         if (!ObjectId.isValid(id))
-          return res.status(400).json({ message: 'Invalid ID' });
+          return res.status(400).json({ message: "Invalid ID" });
 
         const result = await db
-          .collection('donationrequests')
+          .collection("donationrequests")
           .deleteOne({ _id: new ObjectId(id) });
         if (result.deletedCount === 0)
-          return res.status(404).json({ message: 'Request not found' });
+          return res.status(404).json({ message: "Request not found" });
 
-        res.json({ success: true, message: 'Deleted' });
+        res.json({ success: true, message: "Deleted" });
       } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: "Server error" });
       }
     });
 
@@ -211,6 +251,8 @@ async function run() {
         if (!ObjectId.isValid(id)) {
           return res.status(400).json({ message: "Invalid ID format" });
         }
+
+        const db = client.db("BloodConnect");
 
         const request = await db.collection("donationrequests").findOne({
           _id: new ObjectId(id),
