@@ -28,3 +28,4 @@ Thumbs.db
 
 # Optional: coverage folder
 coverage/
+.vercel
