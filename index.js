@@ -93,6 +93,32 @@ async function run() {
       }
     });
 
+    app.get("/api/my-donation-requests", async (req, res) => {
+      try {
+        const { email } = req.query;
+
+        if (!email) {
+          return res.status(400).json({
+            success: false,
+            message: "Email is required",
+          });
+        }
+
+        const requests = await db
+          .collection("donationrequests")
+          .find({ requesterEmail: email })
+          .toArray();
+
+        res.json(requests);
+      } catch (error) {
+        console.error("Error fetching user requests:", error);
+        res.status(500).json({
+          success: false,
+          message: "Server error",
+        });
+      }
+    });
+
     // GET /api/profile – fetch current user's profile
 
     app.get("/api/profile", async (req, res) => {
