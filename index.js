@@ -68,10 +68,21 @@ async function run() {
 
     app.get("/api/donation-requests", async (req, res) => {
       try {
+        const db = client.db("BloodConnect");
         const filter = {};
-        if (req.query.status) {
+        if (req.query.status && req.query.status !== "all") {
           filter.status = req.query.status;
         }
+        if (req.query.bloodGroup) {
+          filter.bloodGroup = req.query.bloodGroup;
+        }
+        if (req.query.district) {
+          filter.district = req.query.district;
+        }
+        if (req.query.upazila) {
+          filter.upazila = req.query.upazila;
+        }
+
         const requests = await db
           .collection("donationrequests")
           .find(filter)
