@@ -350,6 +350,22 @@ async function run() {
           return res.status(400).json({ message: "Invalid blood group" });
         }
 
+        const user = await db
+          .collection("user")
+          .findOne({ email: requesterEmail });
+
+        if (!user) {
+          return res.status(400).json({ message: "Requester not found" });
+        }
+
+        if ((user.status || "active").toLowerCase() === "blocked") {
+          return res.status(403).json({
+            success: false,
+            message:
+              "Your account is blocked. You cannot create donation requests.",
+          });
+        }
+
         const newRequest = {
           recipientName,
           district,
@@ -366,34 +382,19 @@ async function run() {
           createdAt: new Date(),
         };
 
-        const user = await db
-          .collection("user")
-          .findOne({ email: requesterEmail });
-        if (!user) {
-          return res.status(400).json({ message: "Requester not found" });
-        }
-        if ((user.status || "active").toLowerCase() === "blocked") {
-          return res.status(403).json({
-            success: false,
-            message:
-              "Your account is blocked. You cannot create donation requests.",
-          });
-        }
+        
+        const result = await db
+          .collection("donationrequests")
+          .insertOne(newRequest);
 
-        if (
-          !recipientName ||
-          !district ||
-          !upazila ||
-          !bloodGroup ||
-          !donationDate ||
-          !donationTime ||
-          !requesterName ||
-          !requesterEmail
-        ) {
-          return res.status(400).json({ message: "Missing required fields" });
-        }
+        
+        return res.status(201).json({
+          success: true,
+          message: "Donation request posted successfully!",
+          requestId: result.insertedId,
+        });
       } catch (error) {
-        res.status(500).json({ message: "Internal server error" });
+        return res.status(500).json({ message: "Internal server error" });
       }
     });
 
