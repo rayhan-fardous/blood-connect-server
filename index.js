@@ -67,6 +67,49 @@ async function run() {
       }
     });
 
+    const CAN_DONATE_TO = {
+      'O-': ['O-', 'O+', 'A-', 'A+', 'B-', 'B+', 'AB-', 'AB+'],
+      'O+': ['O+', 'A+', 'B+', 'AB+'],
+      'A-': ['A-', 'A+', 'AB-', 'AB+'],
+      'A+': ['A+', 'AB+'],
+      'B-': ['B-', 'B+', 'AB-', 'AB+'],
+      'B+': ['B+', 'AB+'],
+      'AB-': ['AB-', 'AB+'],
+      'AB+': ['AB+'],
+    };
+
+    const CAN_RECEIVE_FROM = {
+      'O-': ['O-'],
+      'O+': ['O+', 'O-'],
+      'A-': ['A-', 'O-'],
+      'A+': ['A+', 'A-', 'O+', 'O-'],
+      'B-': ['B-', 'O-'],
+      'B+': ['B+', 'B-', 'O+', 'O-'],
+      'AB-': ['AB-', 'A-', 'B-', 'O-'],
+      'AB+': ['O-', 'O+', 'A-', 'A+', 'B-', 'B+', 'AB-', 'AB+'],
+    };
+
+    function calculateUrgencyData(donationDate, donationTime) {
+      if (!donationDate) {
+        return { urgencyLevel: 'standard', hoursRemaining: 999 };
+      }
+      try {
+        const timeStr = donationTime || '23:59';
+        const target = new Date(`${donationDate}T${timeStr}:00`);
+        if (isNaN(target.getTime())) {
+          return { urgencyLevel: 'standard', hoursRemaining: 999 };
+        }
+        const diffMs = target.getTime() - Date.now();
+        const hoursRemaining = Math.round(diffMs / (1000 * 60 * 60));
+        let urgencyLevel = 'standard';
+        if (hoursRemaining <= 6) urgencyLevel = 'critical';
+        else if (hoursRemaining <= 24) urgencyLevel = 'high';
+        return { urgencyLevel, hoursRemaining };
+      } catch {
+        return { urgencyLevel: 'standard', hoursRemaining: 999 };
+      }
+    }
+
     app.get("/api/donation-requests", async (req, res) => {
       try {
         const db = client.db("BloodConnect");
@@ -74,9 +117,24 @@ async function run() {
         if (req.query.status && req.query.status !== "all") {
           filter.status = req.query.status;
         }
-        if (req.query.bloodGroup) {
-          filter.bloodGroup = req.query.bloodGroup;
+
+        const smartMatch = req.query.smartMatch === "true";
+        const donorBloodGroup = req.query.donorBloodGroup;
+
+        if (donorBloodGroup && smartMatch) {
+          // Find requests where the patient can receive blood from this donor
+          const compatibleRecipientGroups = CAN_DONATE_TO[donorBloodGroup] || [donorBloodGroup];
+          filter.bloodGroup = { $in: compatibleRecipientGroups };
+        } else if (req.query.bloodGroup) {
+          if (smartMatch) {
+            // Find requests compatible with donor group
+            const compatibleGroups = CAN_DONATE_TO[req.query.bloodGroup] || [req.query.bloodGroup];
+            filter.bloodGroup = { $in: compatibleGroups };
+          } else {
+            filter.bloodGroup = req.query.bloodGroup;
+          }
         }
+
         if (req.query.district) {
           filter.district = req.query.district;
         }
@@ -84,14 +142,53 @@ async function run() {
           filter.upazila = req.query.upazila;
         }
 
-        const requests = await db
+        let requests = await db
           .collection("donationrequests")
           .find(filter)
           .toArray();
+
+        // Enrich with urgency metadata
+        requests = requests.map((item) => {
+          const { urgencyLevel, hoursRemaining } = calculateUrgencyData(
+            item.donationDate,
+            item.donationTime
+          );
+          return {
+            ...item,
+            urgencyLevel,
+            hoursRemaining,
+          };
+        });
+
+        // Urgency rank sorting if requested
+        if (req.query.sortByUrgency === "true") {
+          const urgencyOrder = { critical: 1, high: 2, standard: 3 };
+          requests.sort((a, b) => {
+            const rankDiff = (urgencyOrder[a.urgencyLevel] || 3) - (urgencyOrder[b.urgencyLevel] || 3);
+            if (rankDiff !== 0) return rankDiff;
+            return a.hoursRemaining - b.hoursRemaining;
+          });
+        }
+
         res.json(requests);
       } catch (error) {
         res.status(500).json({ message: "Server error" });
       }
+    });
+
+    app.get("/api/blood-compatibility", (req, res) => {
+      const { bloodGroup } = req.query;
+      if (!bloodGroup) {
+        return res.json({
+          canDonateTo: CAN_DONATE_TO,
+          canReceiveFrom: CAN_RECEIVE_FROM,
+        });
+      }
+      res.json({
+        bloodGroup,
+        canDonateTo: CAN_DONATE_TO[bloodGroup] || [],
+        canReceiveFrom: CAN_RECEIVE_FROM[bloodGroup] || [],
+      });
     });
 
     app.get("/api/my-donation-requests", async (req, res) => {
